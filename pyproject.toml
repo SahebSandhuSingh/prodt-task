@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "travel-supplier-integration"
+version = "0.1.0"
+description = "Supplier Integration Layer for Travel Booking Prototype"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-v --tb=short"
+asyncio_mode = "auto"
+pythonpath = ["."]
+testpaths = ["tests"]
