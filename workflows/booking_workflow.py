@@ -13,6 +13,9 @@ with workflow.unsafe.imports_passed_through():
         persist_booking_record_activity,
         poll_supplier_confirmation_activity,
         revalidate_offer_activity,
+        record_failure_log_activity,
+        record_status_change_activity,
+        record_supplier_reference_activity,
     )
 
 
@@ -37,6 +40,7 @@ TERMINAL_STATES = {"CONFIRMED", "FAILED", "CANCELLED", "PRICE_CHANGED", "REQUIRE
 class BookingWorkflow:
     """
     Temporal workflow orchestrating the complete hotel booking lifecycle.
+    Includes Step 4 structured status history audit tracking across all state transitions.
     """
 
     def __init__(self):
@@ -46,11 +50,13 @@ class BookingWorkflow:
         self._cancel_requested: bool = False
         self._idempotency_key: str = ""
         self._supplier_id: str = ""
+        self._booking_id: str = ""
 
     @workflow.query
     def get_status(self) -> Dict[str, Any]:
         """Query current workflow state and reservation details."""
         return {
+            "booking_id": self._booking_id,
             "status": self._status,
             "current_step": self._current_step,
             "supplier_reservation_id": self._supplier_reservation_id,
@@ -63,27 +69,62 @@ class BookingWorkflow:
     def cancel_booking(self) -> None:
         """Signal workflow to initiate cancellation."""
         if self._status in TERMINAL_STATES:
-            # Signal received after terminal state reached -> no-op
             workflow.logger.info("cancel_booking signal received post-terminal state; ignoring.")
             return
 
         workflow.logger.info("cancel_booking signal received mid-workflow.")
         self._cancel_requested = True
 
+    async def _transition_status(
+        self,
+        new_status: str,
+        reason: str,
+        current_step: Optional[str] = None
+    ) -> None:
+        """
+        Record a status transition into self._status and persist a row to booking_status_history.
+        Best-Effort Policy: Audit history failure does NOT fail the workflow execution.
+        """
+        previous = self._status
+        self._status = new_status
+        if current_step:
+            self._current_step = current_step
+
+        try:
+            await workflow.execute_activity(
+                record_status_change_activity,
+                {
+                    "booking_id": self._booking_id,
+                    "previous_status": previous,
+                    "new_status": new_status,
+                    "reason": reason,
+                },
+                start_to_close_timeout=timedelta(seconds=5),
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+        except Exception as e:
+            workflow.logger.warning(f"Failed to record status transition audit: {e}")
+
     @workflow.run
     async def run(self, request: BookingRequest) -> Dict[str, Any]:
         self._idempotency_key = request.idempotency_key
         self._supplier_id = request.supplier_id
-        self._status = "PROCESSING"
+        self._booking_id = f"BK-{request.idempotency_key[:12]}"
         workflow_id = workflow.info().workflow_id
+
+        # Record initial status transition: PENDING -> PROCESSING
+        await self._transition_status(
+            new_status="PROCESSING",
+            reason="Booking request initiated",
+            current_step="INITIALIZED"
+        )
 
         # -------------------------------------------------------------------------
         # Step 1: Revalidate offer pricing & availability
         # -------------------------------------------------------------------------
         self._current_step = "REVALIDATING_OFFER"
         if self._cancel_requested:
-            self._status = "CANCELLED"
-            self._current_step = "COMPLETED"
+            await self._transition_status("CANCELLED", "Cancelled prior to revalidation", "COMPLETED")
             return self.get_status()
 
         reval_payload = {
@@ -107,8 +148,12 @@ class BookingWorkflow:
         )
 
         if reval_res.get("price_changed_exceeded"):
-            self._status = "PRICE_CHANGED"
-            self._current_step = "COMPLETED"
+            drift_pct = round(reval_res.get("price_drift", 0.0) * 100, 2)
+            await self._transition_status(
+                new_status="PRICE_CHANGED",
+                reason=f"Price drift exceeded threshold: {drift_pct}% change",
+                current_step="COMPLETED"
+            )
             return self.get_status()
 
         # -------------------------------------------------------------------------
@@ -140,7 +185,23 @@ class BookingWorkflow:
 
         self._supplier_reservation_id = booking_res["reservation_id"]
 
-        # Check if cancellation signal arrived right after supplier reservation creation
+        # Persist raw supplier reference response payload for audit trail
+        try:
+            await workflow.execute_activity(
+                record_supplier_reference_activity,
+                {
+                    "booking_id": self._booking_id,
+                    "supplier_id": request.supplier_id,
+                    "supplier_reservation_id": self._supplier_reservation_id,
+                    "raw_supplier_response": booking_res,
+                },
+                start_to_close_timeout=timedelta(seconds=5),
+                retry_policy=RetryPolicy(maximum_attempts=2),
+            )
+        except Exception as ref_err:
+            workflow.logger.warning(f"Failed to record supplier reference audit: {ref_err}")
+
+        # Check if cancellation signal arrived post-reservation creation
         if self._cancel_requested:
             self._current_step = "COMPENSATING_SUPPLIER_RESERVATION"
             if self._supplier_reservation_id:
@@ -157,8 +218,7 @@ class BookingWorkflow:
                         maximum_attempts=3,
                     ),
                 )
-            self._status = "CANCELLED"
-            self._current_step = "COMPLETED"
+            await self._transition_status("CANCELLED", "User cancelled mid-polling", "COMPLETED")
             return self.get_status()
 
         # -------------------------------------------------------------------------
@@ -166,6 +226,7 @@ class BookingWorkflow:
         # -------------------------------------------------------------------------
         self._current_step = "PERSISTING_DB_RECORD"
         persist_payload = {
+            "booking_id": self._booking_id,
             "workflow_id": workflow_id,
             "idempotency_key": request.idempotency_key,
             "supplier_id": request.supplier_id,
@@ -191,7 +252,32 @@ class BookingWorkflow:
         except Exception as e:
             # Saga Compensation: DB write failed permanently after retries
             workflow.logger.error(f"Persist DB failed: {e}. Initiating Saga compensation...")
-            self._current_step = "COMPENSATING_SUPPLIER_RESERVATION"
+            
+            # Record transition: PROCESSING -> COMPENSATING_SUPPLIER_RESERVATION
+            await self._transition_status(
+                new_status="COMPENSATING",
+                reason=f"Persist DB record failed permanently after retries: {e}",
+                current_step="COMPENSATING_SUPPLIER_RESERVATION"
+            )
+
+            # Record failure log
+            try:
+                await workflow.execute_activity(
+                    record_failure_log_activity,
+                    {
+                        "context": "booking_workflow",
+                        "booking_id": self._booking_id,
+                        "supplier_id": request.supplier_id,
+                        "error_type": "DatabasePersistError",
+                        "error_message": str(e),
+                        "retry_attempt_number": 3,
+                    },
+                    start_to_close_timeout=timedelta(seconds=5),
+                    retry_policy=RetryPolicy(maximum_attempts=2),
+                )
+            except Exception:
+                pass
+
             try:
                 await workflow.execute_activity(
                     cancel_supplier_reservation_activity,
@@ -206,13 +292,21 @@ class BookingWorkflow:
                         maximum_attempts=3,
                     ),
                 )
-                self._status = "FAILED"
+                # Saga compensation succeeded -> FAILED
+                await self._transition_status(
+                    new_status="FAILED",
+                    reason="DB persist failed; supplier reservation successfully cancelled via Saga compensation",
+                    current_step="COMPLETED"
+                )
             except Exception as comp_err:
-                # Compensation ALSO failed!
+                # Compensation ALSO failed! -> REQUIRES_MANUAL_REVIEW
                 workflow.logger.error(f"Saga compensation failed: {comp_err}. Moving to REQUIRES_MANUAL_REVIEW.")
-                self._status = "REQUIRES_MANUAL_REVIEW"
+                await self._transition_status(
+                    new_status="REQUIRES_MANUAL_REVIEW",
+                    reason=f"DB persist failed AND supplier cancellation compensation failed: {comp_err}",
+                    current_step="COMPLETED"
+                )
 
-            self._current_step = "COMPLETED"
             return self.get_status()
 
         # -------------------------------------------------------------------------
@@ -240,23 +334,7 @@ class BookingWorkflow:
                             maximum_attempts=3,
                         ),
                     )
-                self._status = "CANCELLED"
-                self._current_step = "COMPLETED"
-
-                # Update DB record
-                persist_payload["status"] = "CANCELLED"
-                try:
-                    await workflow.execute_activity(
-                        persist_booking_record_activity,
-                        persist_payload,
-                        start_to_close_timeout=timedelta(seconds=10),
-                        retry_policy=RetryPolicy(
-                            initial_interval=timedelta(seconds=1),
-                            maximum_attempts=2,
-                        ),
-                    )
-                except Exception:
-                    pass
+                await self._transition_status("CANCELLED", "User cancelled mid-polling", "COMPLETED")
                 return self.get_status()
 
             poll_res = await workflow.execute_activity(
@@ -275,21 +353,24 @@ class BookingWorkflow:
 
             status_val = poll_res.get("status", "").lower()
             if status_val == "confirmed":
-                self._status = "CONFIRMED"
+                await self._transition_status("CONFIRMED", "Supplier confirmed reservation", "COMPLETED")
                 confirmed = True
                 break
             elif status_val in ("cancelled", "failed"):
-                self._status = "FAILED"
+                await self._transition_status("FAILED", f"Supplier returned failure status: {status_val}", "COMPLETED")
                 break
 
             await workflow.sleep(timedelta(seconds=2))
 
         # Strict Resolution Rule: If max attempts exhausted without explicit CONFIRMED or FAILED status
         if not confirmed and self._status not in ("CONFIRMED", "FAILED", "CANCELLED"):
-            self._status = "REQUIRES_MANUAL_REVIEW"
+            await self._transition_status(
+                new_status="REQUIRES_MANUAL_REVIEW",
+                reason="Supplier status polling exhausted 5 attempts without explicit confirmed/failed status",
+                current_step="COMPLETED"
+            )
 
         # Final DB status update
-        self._current_step = "COMPLETED"
         persist_payload["status"] = self._status
         try:
             await workflow.execute_activity(

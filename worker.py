@@ -10,14 +10,16 @@ from activities.booking_activities import (
     persist_booking_record_activity,
     poll_supplier_confirmation_activity,
     revalidate_offer_activity,
+    record_failure_log_activity,
+    record_status_change_activity,
+    record_supplier_reference_activity,
 )
 from db.session import init_db
+from logging_config import setup_json_logging
 from workflows.booking_workflow import BookingWorkflow
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(name)s (%(filename)s:%(lineno)d): %(message)s"
-)
+# Initialize structured JSON logging
+setup_json_logging()
 logger = logging.getLogger("temporal_worker")
 
 TEMPORAL_HOST = os.getenv("TEMPORAL_HOST", "localhost:7233")
@@ -45,6 +47,9 @@ async def main():
             persist_booking_record_activity,
             poll_supplier_confirmation_activity,
             cancel_supplier_reservation_activity,
+            record_status_change_activity,
+            record_supplier_reference_activity,
+            record_failure_log_activity,
         ],
     )
 

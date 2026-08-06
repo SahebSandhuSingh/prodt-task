@@ -1,4 +1,5 @@
 from datetime import date, datetime, timezone
+import logging
 import uuid
 from typing import Any, Dict, Optional
 
@@ -7,11 +8,16 @@ from sqlalchemy.future import select
 
 from adapters.exceptions import SupplierPriceChangedError, SupplierError
 from adapters.registry import registry
-from db.models import BookingRecord
+from db.models import (
+    BookingRecord,
+    BookingStatusHistoryRecord,
+    FailureLogRecord,
+    SupplierReferenceRecord,
+)
 from db.session import AsyncSessionLocal
 from schemas.offer import AvailabilityStatus, UnifiedOffer
 
-# Maximum allowed price drift threshold (5%)
+logger = logging.getLogger("booking_activities")
 PRICE_DRIFT_THRESHOLD: float = 0.05
 
 
@@ -19,8 +25,6 @@ PRICE_DRIFT_THRESHOLD: float = 0.05
 async def revalidate_offer_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Activity 1: Revalidate pricing and availability with the supplier.
-    
-    Returns details on price drift and whether drift exceeds the 5% threshold.
     """
     supplier_id = payload["supplier_id"]
     property_id = payload["property_id"]
@@ -60,7 +64,7 @@ async def revalidate_offer_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
 @activity.defn
 async def create_supplier_reservation_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Activity 2: Book reservation with the supplier adapter using idempotency token.
+    Activity 2: Book reservation with supplier adapter using idempotency token.
     """
     supplier_id = payload["supplier_id"]
     property_id = payload["property_id"]
@@ -112,7 +116,6 @@ async def persist_booking_record_activity(payload: Dict[str, Any]) -> Dict[str, 
     guest_name = payload.get("guest_name", "Guest")
 
     async with AsyncSessionLocal() as session:
-        # Check if record exists by idempotency_key
         stmt = select(BookingRecord).where(BookingRecord.idempotency_key == idempotency_key)
         res = await session.execute(stmt)
         record = res.scalar_one_or_none()
@@ -164,3 +167,90 @@ async def cancel_supplier_reservation_activity(payload: Dict[str, Any]) -> Dict[
 
     adapter = registry.get(supplier_id)
     return await adapter.cancel_reservation(supplier_res_id)
+
+
+@activity.defn
+async def record_status_change_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Step 4 Activity: Write a status history audit record for every workflow state transition.
+    """
+    booking_id = payload["booking_id"]
+    previous_status = payload.get("previous_status")
+    new_status = payload["new_status"]
+    reason = payload.get("reason", "")
+
+    try:
+        async with AsyncSessionLocal() as session:
+            history_record = BookingStatusHistoryRecord(
+                booking_id=booking_id,
+                previous_status=previous_status,
+                new_status=new_status,
+                reason=reason,
+                changed_at=datetime.now(timezone.utc)
+            )
+            session.add(history_record)
+            await session.commit()
+            return {"status": "persisted", "history_id": history_record.id}
+    except Exception as e:
+        logger.error(f"Failed to record status change for booking '{booking_id}': {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+@activity.defn
+async def record_supplier_reference_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Step 4 Activity: Persist raw supplier response details for audit trail.
+    """
+    booking_id = payload["booking_id"]
+    supplier_id = payload["supplier_id"]
+    supplier_res_id = payload["supplier_reservation_id"]
+    raw_response = payload.get("raw_supplier_response", {})
+
+    try:
+        async with AsyncSessionLocal() as session:
+            ref_record = SupplierReferenceRecord(
+                booking_id=booking_id,
+                supplier_id=supplier_id,
+                supplier_reservation_id=supplier_res_id,
+                raw_supplier_response=raw_response,
+                created_at=datetime.now(timezone.utc)
+            )
+            session.add(ref_record)
+            await session.commit()
+            return {"status": "persisted", "ref_id": ref_record.id}
+    except Exception as e:
+        logger.error(f"Failed to record supplier reference for booking '{booking_id}': {e}")
+        return {"status": "failed", "error": str(e)}
+
+
+@activity.defn
+async def record_failure_log_activity(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Step 4 Activity: Write an activity or workflow failure event record.
+    """
+    context = payload.get("context", "booking_workflow")
+    request_id = payload.get("request_id")
+    booking_id = payload.get("booking_id")
+    supplier_id = payload.get("supplier_id")
+    error_type = payload["error_type"]
+    error_message = payload["error_message"]
+    retry_attempt = payload.get("retry_attempt_number", 1)
+
+    try:
+        async with AsyncSessionLocal() as session:
+            fail_record = FailureLogRecord(
+                context=context,
+                request_id=request_id,
+                booking_id=booking_id,
+                supplier_id=supplier_id,
+                error_type=error_type,
+                error_message=error_message,
+                retry_attempt_number=retry_attempt,
+                occurred_at=datetime.now(timezone.utc)
+            )
+            session.add(fail_record)
+            await session.commit()
+            return {"status": "persisted", "failure_id": fail_record.id}
+    except Exception as e:
+        logger.error(f"Failed to write failure log: {e}")
+        return {"status": "failed", "error": str(e)}
