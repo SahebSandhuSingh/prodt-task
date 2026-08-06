@@ -13,9 +13,17 @@ services:
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres -d travel_booking"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  temporal:
+    image: temporalio/admin-tools:latest
+    container_name: travel_booking_temporal
+    command: temporal server start-dev --ip 0.0.0.0 --port 7233 --ui-port 8233
+    ports:
+      - "7233:7233"
+      - "8233:8233"
 
   api:
     build: .
@@ -25,12 +33,12 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/travel_booking
-      - TEMPORAL_HOST=${TEMPORAL_HOST:-host.docker.internal:7233}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - TEMPORAL_HOST=temporal:7233
     depends_on:
       postgres:
         condition: service_healthy
+      temporal:
+        condition: service_started
 
   worker:
     build: .
@@ -38,12 +46,12 @@ services:
     command: python worker.py
     environment:
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/travel_booking
-      - TEMPORAL_HOST=${TEMPORAL_HOST:-host.docker.internal:7233}
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      - TEMPORAL_HOST=temporal:7233
     depends_on:
       postgres:
         condition: service_healthy
+      temporal:
+        condition: service_started
 
 volumes:
   postgres_data:
