@@ -20,6 +20,10 @@ from services.ranking import rank_offers
 # Configure structured logger for search service
 logger = logging.getLogger("search_service")
 
+# Module-level set holding strong references to running background audit tasks
+# Prevents Python asyncio garbage collection of unreferenced tasks mid-execution
+_background_tasks: Set[asyncio.Task] = set()
+
 # Default maximum timeout allowed per supplier call (in seconds)
 DEFAULT_SUPPLIER_TIMEOUT: float = 5.0
 
@@ -246,8 +250,8 @@ async def perform_search(
         }
     )
 
-    # True Fire-and-Forget: launch background task without awaiting
-    asyncio.create_task(
+    # True Fire-and-Forget: launch background task with retained strong reference
+    task = asyncio.create_task(
         _persist_search_audit_task(
             request=request,
             request_id=request_id,
@@ -257,6 +261,8 @@ async def perform_search(
             failures=failures_to_log
         )
     )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return SearchResponse(
         results=ranked_offers,
