@@ -1,8 +1,11 @@
-# Supplier Integration Layer — Implementation & Architecture Guide
+# Supplier Integration & Search API Layer — Architecture & Implementation Guide
 
 ## Overview
 
-The **Supplier Integration Layer** is an isolated Python module designed to normalize data and interaction flows across heterogeneous hotel supply partners (such as Atlas Hotels and Nova Stays). It abstracts differences in field names, pricing structures, date formats, and error conditions into a unified internal representation (`UnifiedOffer`) and standardized exception hierarchy.
+This project is a clean, isolated **Travel Booking Prototype** built in Python.
+
+- **Step 1 — Supplier Integration Layer**: Abstract adapter layer (`SupplierAdapter`), normalized `UnifiedOffer` Pydantic model, exception hierarchy (`SupplierError`), mock APIs (`MockAtlasAPI` & `MockNovaAPI`), and dynamic `AdapterRegistry`.
+- **Step 2 — Hotel Search API Layer**: FastAPI search application exposing `POST /search/hotels` and `GET /health`. Executes concurrent supplier queries, enforces timeout protection, deduplicates overlapping properties, ranks offers via a weighted composite formula, and degrades gracefully on partial or total supplier failures.
 
 ---
 
@@ -10,11 +13,13 @@ The **Supplier Integration Layer** is an isolated Python module designed to norm
 
 ```
 /Users/sahebsandhu/prodt-task/
-├── pyproject.toml              # Build & pytest setup (asyncio_mode = "auto")
+├── pyproject.toml              # Build, dependencies, & pytest config
 ├── IMPLEMENTATION.md           # Implementation document & architectural guide
 ├── README.md                   # Quickstart guide
+├── conftest.py                 # Root sys.path test environment configuration
 ├── schemas/
-│   └── offer.py                # Pydantic schema for UnifiedOffer & AvailabilityStatus
+│   ├── offer.py                # Pydantic schema for UnifiedOffer & AvailabilityStatus (Step 1)
+│   └── search.py               # SearchRequest & SearchResponse schemas (Step 2)
 ├── mocks/
 │   ├── mock_atlas_api.py       # Simulated Atlas Hotels API (ISO dates, net/gross price)
 │   └── mock_nova_api.py        # Simulated Nova Stays API (DD-MM-YYYY dates, per-night price)
@@ -24,191 +29,98 @@ The **Supplier Integration Layer** is an isolated Python module designed to norm
 │   ├── atlas_adapter.py        # Adapter for Atlas Hotels API
 │   ├── nova_adapter.py         # Adapter for Nova Stays API
 │   └── registry.py             # Supplier adapter registry and factory functions
+├── services/
+│   ├── search_service.py       # Concurrent search aggregator, deduplication, & timeout handling
+│   └── ranking.py              # Pure offer scoring & ranking engine
+├── api/
+│   ├── main.py                 # FastAPI application instance & logging setup
+│   └── routes/
+│       └── search.py           # REST endpoints: POST /search/hotels, GET /health
 └── tests/
-    ├── test_atlas_adapter.py   # Unit tests for AtlasAdapter & failure modes
-    ├── test_nova_adapter.py    # Unit tests for NovaAdapter & failure modes
-    └── test_normalization.py   # Schema price math & cross-supplier normalization tests
+    ├── conftest.py             # Pytest configuration
+    ├── test_atlas_adapter.py   # Unit tests for AtlasAdapter & failure modes (Step 1)
+    ├── test_nova_adapter.py    # Unit tests for NovaAdapter & failure modes (Step 1)
+    ├── test_normalization.py   # Schema price math & cross-supplier normalization tests (Step 1)
+    ├── test_ranking.py         # Pure ranking algorithm tests (Step 2)
+    ├── test_search_service.py  # Concurrency, timeout, deduplication, & failure tests (Step 2)
+    └── test_search_endpoint.py # FastAPI endpoint validation & response tests (Step 2)
 ```
 
 ---
 
-## 1. Unified Internal Schema (`schemas/offer.py`)
+## Step 2 Architecture & Specifications
 
-The `UnifiedOffer` Pydantic model normalizes all supplier-specific stay quotes into a common format:
+### 1. API Schemas (`schemas/search.py`)
 
-```python
-class UnifiedOffer(BaseModel):
-    supplier_id: str
-    property_id: str
-    property_name: str
-    location: str
-    room_type: str
-    check_in_date: date
-    check_out_date: date
-    currency: str
-    base_price: float
-    taxes_and_fees: float
-    total_price: float
-    cancellation_policy: str
-    availability_status: AvailabilityStatus
-```
+- **`SearchRequest`**:
+  - `destination: str` (non-empty string)
+  - `check_in: date`
+  - `check_out: date`
+  - `guests: int` ($> 0$)
+  - `rooms: int` ($> 0$)
+  - Model validator: Enforces `check_out > check_in` (raises HTTP 422 if invalid).
 
-### Price Validation Rule
-The model includes a `@model_validator(mode="after")` that enforces mathematical consistency:
-$$\text{total\_price} = \text{round}(\text{base\_price} + \text{taxes\_and\_fees}, 2)$$
-If a supplier payload violates this contract, a Pydantic `ValidationError` is raised immediately.
+- **`SearchResponse`**:
+  - `results: List[UnifiedOffer]` (ranked offers list)
+  - `suppliers_queried: List[str]`
+  - `suppliers_failed: List[str]`
+  - `request_id: str` (UUID4 tracing identifier)
 
 ---
 
-## 2. Standardized Exceptions (`adapters/exceptions.py`)
+### 2. Search Service & Concurrency (`services/search_service.py`)
 
-All supplier-specific runtime errors, HTTP status codes, socket timeouts, and parsing failures are mapped into normalized exceptions derived from `SupplierError`:
-
-- `SupplierError(Exception)` — Base exception carrying `supplier_id` and optional `original_error`.
-  - `SupplierTimeoutError` — Raised when a supplier call exceeds timeout limits.
-  - `SupplierServerError` — Raised on supplier 5xx internal server errors.
-  - `SupplierMalformedResponseError` — Raised when a response lacks required fields or has incompatible types.
-  - `SupplierPriceChangedError` — Raised during pricing re-checks if the total quote has changed (`old_price` vs `new_price`).
-  - `SupplierNotFoundError` — Raised when a property or reservation ID is not found.
-  - `SupplierBookingError` — Raised when reservation creation or cancellation fails.
+- **Concurrent Execution**: `asyncio.gather(*tasks, return_exceptions=True)` queries all registered supplier adapters concurrently.
+- **Timeout Protection**: Each adapter query is bounded by `asyncio.wait_for(..., timeout=5.0)` to guarantee that hanging supplier calls never stall the request indefinitely.
+- **Graceful Failure Handling**: If an adapter raises a `SupplierError`, `asyncio.TimeoutError`, or unexpected runtime exception, the error is logged using Python's standard `logging` module, the supplier ID is added to `suppliers_failed`, and execution continues with remaining suppliers. If all suppliers fail, the endpoint returns a HTTP 200 response with `results: []` and `suppliers_failed` populated.
 
 ---
 
-## 3. Abstract Base Adapter (`adapters/base.py`)
+### 3. Deduplication Heuristic (`services/search_service.py`)
 
-All concrete adapters inherit from `SupplierAdapter(ABC)` and implement five core asynchronous methods:
-
-```python
-class SupplierAdapter(ABC):
-    @property
-    @abstractmethod
-    def supplier_id(self) -> str: pass
-
-    @abstractmethod
-    async def search_properties(self, destination: str, check_in: date, check_out: date, guests: int = 1, rooms: int = 1) -> List[UnifiedOffer]: pass
-
-    @abstractmethod
-    async def get_pricing_and_availability(self, property_id: str, check_in: date, check_out: date, guests: int = 1, rooms: int = 1, room_type: Optional[str] = None) -> UnifiedOffer: pass
-
-    @abstractmethod
-    async def create_reservation(self, offer: UnifiedOffer, guest_details: Dict[str, Any]) -> Dict[str, Any]: pass
-
-    @abstractmethod
-    async def get_reservation_status(self, reservation_id: str) -> Dict[str, Any]: pass
-
-    @abstractmethod
-    async def cancel_reservation(self, reservation_id: str) -> Dict[str, Any]: pass
-```
-
-### Standardized Reservation Response Format
-
-To ensure consistent integration across suppliers, reservation methods return standard dictionary contracts:
-
-1. **`create_reservation(...)`**:
-   ```json
-   {
-     "reservation_id": "ATL-RES-A1B2C3D4",
-     "supplier_id": "atlas",
-     "property_id": "ATL-PAR-01",
-     "status": "confirmed",
-     "total_price": 240.0,
-     "currency": "EUR",
-     "guest_name": "Alice Smith",
-     "confirmation_code": "PIN123",
-     "created_at": "2026-08-05T00:00:00Z"
-   }
-   ```
-2. **`get_reservation_status(...)`**:
-   ```json
-   {
-     "reservation_id": "ATL-RES-A1B2C3D4",
-     "supplier_id": "atlas",
-     "property_id": "ATL-PAR-01",
-     "status": "confirmed",
-     "guest_name": "Alice Smith",
-     "updated_at": "2026-08-05T00:00:00Z"
-   }
-   ```
-3. **`cancel_reservation(...)`**:
-   ```json
-   {
-     "reservation_id": "ATL-RES-A1B2C3D4",
-     "supplier_id": "atlas",
-     "status": "cancelled",
-     "cancellation_code": "ATL-CNL-998877",
-     "refund_amount": 240.0,
-     "cancelled_at": "2026-08-05T00:00:00Z"
-   }
-   ```
+- **Matching Heuristic**: Properties are matched using a normalized composite key:
+  $$\text{Key} = (\text{normalize\_string}(\text{property\_name}), \text{normalize\_string}(\text{location}))$$
+- **Selection Decision**: When duplicate properties are identified across suppliers, the **cheaper offer** (lowest `total_price`) is retained to ensure maximum value for the user.
 
 ---
 
-## 4. Supplier Mocks (`mocks/`)
+### 4. Ranking Engine (`services/ranking.py`)
 
-### `MockAtlasAPI` (`mocks/mock_atlas_api.py`)
-- **Date Format**: ISO 8601 strings (`YYYY-MM-DD`).
-- **Pricing Payload**: Nested `price_breakdown` (`net_amount`, `tax_and_service`, `gross_amount`, `currency_code`).
-- **Policy Enum**: `FREE_CANCEL_24H`, `NON_REFUNDABLE_ATLAS`.
-- **Constructor Injection**: Accepts `simulated_failure: str | None = None` (`"timeout"`, `"500_error"`, `"malformed"`, `"price_changed"`).
+The ranking engine scores offers using a weighted composite formula:
 
-### `MockNovaAPI` (`mocks/mock_nova_api.py`)
-- **Date Format**: Custom European format (`DD-MM-YYYY`).
-- **Pricing Payload**: Per-night base calculation (`nightlyBase * nights + surcharges`).
-- **Policy Enum**: `FLEXIBLE_CANCEL`, `NON_REFUNDABLE_NOVA`.
-- **Constructor Injection**: Accepts `simulated_failure: str | None = None` (`"timeout"`, `"500_error"`, `"malformed"`, `"price_changed"`).
+$$\text{Final Score} = (0.50 \times \text{Price Score}) + (0.30 \times \text{Availability Score}) + (0.20 \times \text{Supplier Weight})$$
 
----
+#### Sub-score Computation:
+1. **Price Score [0.0 - 1.0]**:
+   - Inverse min-max normalization:
+     $$\text{Price Score} = 1.0 - \frac{\text{total\_price} - \text{min\_price}}{\text{max\_price} - \text{min\_price}}$$
+   - If all prices in the result set are identical or only 1 offer exists, $\text{Price Score} = 1.0$.
+2. **Availability Score [0.0 - 1.0]**:
+   - `AVAILABLE` $\rightarrow 1.0$
+   - `ON_REQUEST` $\rightarrow 0.7$
+   - Others $\rightarrow 0.0$
+3. **Supplier Weight [0.0 - 1.0]**:
+   - Configurable weight lookup dictionary: Atlas ($0.90$), Nova ($0.85$), Default ($0.80$).
 
-## 5. Adapter Registry (`adapters/registry.py`)
-
-The `AdapterRegistry` manages supplier instances dynamically using a dictionary mapping `supplier_id -> SupplierAdapter`.
-
-```python
-from adapters.registry import get_adapter, register_adapter
-
-# Fetch pre-registered adapters
-atlas_adapter = get_adapter("atlas")
-nova_adapter = get_adapter("nova")
-
-# Adding a 3rd supplier later requires 0 edits to existing adapters:
-# register_adapter(AcmeAdapter())
-```
+Results are returned sorted descending by `Final Score`.
 
 ---
 
-## 6. Running Unit Tests
+### 5. Structured Logging (`api/routes/search.py` & `services/search_service.py`)
 
-Unit tests are written using `pytest` and `pytest-asyncio` with `asyncio_mode = "auto"`.
+Requests and supplier errors are logged using standard Python `logging.getLogger("search_service")`.
+Log entries record: `request_id`, `destination`, `check_in`, `check_out`, `suppliers_queried`, `suppliers_failed`, `raw_offers_count`, and `final_results_count`. No PII is logged.
 
-### Test Execution Command
+---
+
+## Running the Complete Test Suite
+
+Run all Step 1 and Step 2 tests together:
+
 ```bash
-pytest -v tests/
+/Users/sahebsandhu/prodt-task/.venv312/bin/pytest -v
 ```
 
-### Verified Test Cases
-1. `test_atlas_adapter.py`:
-   - Search normalization to `UnifiedOffer`
-   - Price re-check and booking flow
-   - Standardized exception mapping for timeout, 500 error, malformed response, and price change
-2. `test_nova_adapter.py`:
-   - `DD-MM-YYYY` date conversion and per-night price computation
-   - Booking, status lookup, and void/cancellation flow
-   - Exception mapping for all simulated failure modes
-3. `test_normalization.py`:
-   - Pydantic price total validator assertion (`base_price + taxes_and_fees == total_price`)
-   - Invalid price total rejection check
-   - Multi-supplier search aggregation uniformity
-   - Adapter registry lookup and error handling
-
----
-
-## Key Design Decisions & Assumptions
-
-1. **Constructor Failure Injection**:
-   Rather than relying on environment variables (which introduce global state side-effects during concurrent test runs), mock failure modes are injected directly into the mock API constructors (`MockAtlasAPI(simulated_failure="timeout")`).
-2. **Explicit Price Math Validation**:
-   `UnifiedOffer` enforces floating point price consistency via Pydantic model validation (`round(base_price + taxes_and_fees, 2) == round(total_price, 2)`).
-3. **Normalized Date Objects**:
-   All internal search and offer models use Python `datetime.date` objects. Date formatting logic (ISO for Atlas, `DD-MM-YYYY` for Nova) is entirely isolated within each adapter.
-4. **Decoupled Architecture**:
-   None of the adapter code imports from another supplier adapter or leaks supplier-specific fields into `schemas/` or `base.py`.
+### Coverage:
+- Step 1: Normalization, adapter errors, mock failure injection, price math validation.
+- Step 2: Ranking formula, search service concurrency, deduplication logic, timeout handling, FastAPI request validation (`check_out > check_in`, `guests > 0`), and HTTP response verification.
