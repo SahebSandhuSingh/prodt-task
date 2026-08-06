@@ -142,7 +142,8 @@ class AtlasAdapter(SupplierAdapter):
     async def create_reservation(
         self,
         offer: UnifiedOffer,
-        guest_details: Dict[str, Any]
+        guest_details: Dict[str, Any],
+        idempotency_key: Optional[str] = None
     ) -> Dict[str, Any]:
         try:
             raw_res = await self.api.book_stay(
@@ -150,7 +151,8 @@ class AtlasAdapter(SupplierAdapter):
                 guest_info=guest_details,
                 start_date=offer.check_in_date.isoformat(),
                 end_date=offer.check_out_date.isoformat(),
-                expected_price=offer.total_price
+                expected_price=offer.total_price,
+                idempotency_key=idempotency_key
             )
             
             return {

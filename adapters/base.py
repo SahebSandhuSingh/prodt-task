@@ -83,7 +83,8 @@ class SupplierAdapter(ABC):
     async def create_reservation(
         self,
         offer: UnifiedOffer,
-        guest_details: Dict[str, Any]
+        guest_details: Dict[str, Any],
+        idempotency_key: Optional[str] = None
     ) -> Dict[str, Any]:
         """Book a reservation given a validated offer and guest details."""
         pass

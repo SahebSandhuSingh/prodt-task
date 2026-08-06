@@ -17,6 +17,7 @@ class MockAtlasAPI:
     def __init__(self, simulated_failure: Optional[str] = None):
         self.simulated_failure = simulated_failure
         self._reservations: Dict[str, Dict[str, Any]] = {}
+        self._idempotency_records: Dict[str, Dict[str, Any]] = {}
         
         # Hardcoded sample properties for Atlas Hotels
         self._properties = [
@@ -132,9 +133,13 @@ class MockAtlasAPI:
         guest_info: Dict[str, Any],
         start_date: str,
         end_date: str,
-        expected_price: float
+        expected_price: float,
+        idempotency_key: Optional[str] = None
     ) -> Dict[str, Any]:
         self._check_simulated_failure()
+
+        if idempotency_key and idempotency_key in self._idempotency_records:
+            return self._idempotency_records[idempotency_key]
 
         if self.simulated_failure == "malformed":
             return {"status": "OK"}  # missing booking ref and details
@@ -155,6 +160,8 @@ class MockAtlasAPI:
             "timestamp_iso": datetime.now(timezone.utc).isoformat() + "Z"
         }
         self._reservations[booking_ref] = reservation
+        if idempotency_key:
+            self._idempotency_records[idempotency_key] = reservation
         return reservation
 
     async def fetch_booking(self, booking_ref: str) -> Dict[str, Any]:

@@ -149,7 +149,8 @@ class NovaAdapter(SupplierAdapter):
     async def create_reservation(
         self,
         offer: UnifiedOffer,
-        guest_details: Dict[str, Any]
+        guest_details: Dict[str, Any],
+        idempotency_key: Optional[str] = None
     ) -> Dict[str, Any]:
         try:
             guest_name = guest_details.get("name", "Unknown Guest")
@@ -158,7 +159,8 @@ class NovaAdapter(SupplierAdapter):
                 lead_guest=guest_name,
                 checkin_str=self._format_date(offer.check_in_date),
                 checkout_str=self._format_date(offer.check_out_date),
-                quoted_total=offer.total_price
+                quoted_total=offer.total_price,
+                idempotency_key=idempotency_key
             )
 
             status = "confirmed" if raw_booking.get("state") == "ACTIVE" else "failed"

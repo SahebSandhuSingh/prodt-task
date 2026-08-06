@@ -17,6 +17,7 @@ class MockNovaAPI:
     def __init__(self, simulated_failure: Optional[str] = None):
         self.simulated_failure = simulated_failure
         self._bookings: Dict[str, Dict[str, Any]] = {}
+        self._idempotency_records: Dict[str, Dict[str, Any]] = {}
 
         # Hardcoded sample properties for Nova Stays
         self._properties = [
@@ -136,9 +137,13 @@ class MockNovaAPI:
         lead_guest: str,
         checkin_str: str,
         checkout_str: str,
-        quoted_total: float
+        quoted_total: float,
+        idempotency_key: Optional[str] = None
     ) -> Dict[str, Any]:
         self._check_simulated_failure()
+
+        if idempotency_key and idempotency_key in self._idempotency_records:
+            return self._idempotency_records[idempotency_key]
 
         if self.simulated_failure == "malformed":
             return {"res": "ok"}
@@ -159,6 +164,8 @@ class MockNovaAPI:
             "timestamp": datetime.now(timezone.utc).isoformat() + "Z"
         }
         self._bookings[booking_code] = record
+        if idempotency_key:
+            self._idempotency_records[idempotency_key] = record
         return record
 
     async def query_booking_state(self, booking_code: str) -> Dict[str, Any]:
