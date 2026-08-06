@@ -26,7 +26,8 @@ class BookingRequestPayload(BaseModel):
 
 
 async def get_temporal_client() -> Client:
-    return await Client.connect(TEMPORAL_HOST)
+    temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
+    return await Client.connect(temporal_host)
 
 
 @router.post("", status_code=status.HTTP_202_ACCEPTED)

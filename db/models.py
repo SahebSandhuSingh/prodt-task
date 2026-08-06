@@ -85,7 +85,7 @@ class NormalizedOfferRecord(Base):
     __tablename__ = "normalized_offers"
 
     offer_id = Column(String(64), primary_key=True, index=True)
-    request_id = Column(String(64), ForeignKey("search_requests.request_id"), index=True, nullable=False)
+    request_id = Column(String(64), ForeignKey("search_requests.request_id"), primary_key=True, index=True, nullable=False)
     supplier_id = Column(String(32), nullable=False)
     property_id = Column(String(64), nullable=False)
     property_name = Column(String(128), nullable=False)

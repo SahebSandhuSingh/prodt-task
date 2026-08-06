@@ -18,6 +18,13 @@ if config.config_file_name:
 
 target_metadata = Base.metadata
 
+# Read DATABASE_URL dynamically from environment if set
+env_db_url = os.getenv("DATABASE_URL")
+if env_db_url:
+    if env_db_url.startswith("postgresql") and "asyncpg" not in env_db_url:
+        env_db_url = env_db_url.replace("postgresql://", "postgresql+asyncpg://")
+    config.set_main_option("sqlalchemy.url", env_db_url)
+
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")

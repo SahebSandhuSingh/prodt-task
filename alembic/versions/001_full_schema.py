@@ -72,7 +72,7 @@ def upgrade() -> None:
         sa.Column('rank_score', sa.Float(), nullable=True),
         sa.Column('created_at', sa.DateTime(timezone=True), nullable=False),
         sa.ForeignKeyConstraint(['request_id'], ['search_requests.request_id'], ondelete='CASCADE'),
-        sa.PrimaryKeyConstraint('offer_id')
+        sa.PrimaryKeyConstraint("offer_id", "request_id"),
     )
     op.create_index(op.f('ix_normalized_offers_offer_id'), 'normalized_offers', ['offer_id'], unique=False)
     op.create_index(op.f('ix_normalized_offers_request_id'), 'normalized_offers', ['request_id'], unique=False)

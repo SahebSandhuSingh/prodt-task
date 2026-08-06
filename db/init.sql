@@ -28,7 +28,7 @@ CREATE TABLE IF NOT EXISTS search_requests (
 );
 
 CREATE TABLE IF NOT EXISTS normalized_offers (
-    offer_id VARCHAR(64) PRIMARY KEY,
+    offer_id VARCHAR(64) NOT NULL,
     request_id VARCHAR(64) NOT NULL REFERENCES search_requests(request_id) ON DELETE CASCADE,
     supplier_id VARCHAR(32) NOT NULL,
     property_id VARCHAR(64) NOT NULL,
@@ -44,7 +44,8 @@ CREATE TABLE IF NOT EXISTS normalized_offers (
     cancellation_policy VARCHAR(256) NOT NULL,
     availability_status VARCHAR(32) NOT NULL,
     rank_score DOUBLE PRECISION,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (offer_id, request_id)
 );
 
 CREATE TABLE IF NOT EXISTS supplier_references (

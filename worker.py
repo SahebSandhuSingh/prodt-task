@@ -27,14 +27,14 @@ TASK_QUEUE = "booking-task-queue"
 
 
 async def main():
-    logger.info("Initializing database tables...")
-    try:
+    db_url = os.getenv("DATABASE_URL")
+    if db_url:
+        logger.info("Initializing database tables...")
         await init_db()
-    except Exception as e:
-        logger.warning(f"Database initialization warning (ignoring if offline during mock tests): {e}")
 
-    logger.info(f"Connecting to Temporal server at {TEMPORAL_HOST}...")
-    client = await Client.connect(TEMPORAL_HOST)
+    temporal_host = os.getenv("TEMPORAL_HOST", "localhost:7233")
+    logger.info(f"Connecting to Temporal server at {temporal_host}...")
+    client = await Client.connect(temporal_host)
 
     logger.info(f"Starting Temporal worker on task queue '{TASK_QUEUE}'...")
     worker = Worker(

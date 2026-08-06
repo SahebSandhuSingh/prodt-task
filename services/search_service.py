@@ -113,6 +113,7 @@ async def _persist_search_audit_task(
                 created_at=datetime.now(timezone.utc)
             )
             session.add(search_record)
+            await session.flush()
 
             # 2. Persist NormalizedOfferRecord rows
             for idx, offer in enumerate(ranked_offers):
