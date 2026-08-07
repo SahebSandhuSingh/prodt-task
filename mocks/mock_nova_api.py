@@ -50,6 +50,34 @@ class MockNovaAPI:
                 "status": "AVAILABLE"
             },
             {
+                "propId": "NOV-NYC-201",
+                "title": "Nova Times Square Residences",
+                "locationName": "New York",
+                "roomType": "Skyline Loft",
+                "pricing": {
+                    "nightlyBase": 320.0,
+                    "nights": 1,
+                    "surcharges": 60.0,
+                    "currency": "USD"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
+                "propId": "NOV-TYO-201",
+                "title": "Nova Shibuya Modern Stay",
+                "locationName": "Tokyo",
+                "roomType": "Urban Studio",
+                "pricing": {
+                    "nightlyBase": 19000.0,
+                    "nights": 1,
+                    "surcharges": 3000.0,
+                    "currency": "JPY"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
                 "propId": "NOV-SYD-303",
                 "title": "Nova Harbour View Villas",
                 "locationName": "Sydney",
@@ -59,6 +87,20 @@ class MockNovaAPI:
                     "nights": 1,
                     "surcharges": 60.0,
                     "currency": "AUD"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
+                "propId": "NOV-ROM-101",
+                "title": "Nova Spanish Steps Heritage Stay",
+                "locationName": "Rome",
+                "roomType": "Classic Balcony Room",
+                "pricing": {
+                    "nightlyBase": 165.0,
+                    "nights": 1,
+                    "surcharges": 30.0,
+                    "currency": "EUR"
                 },
                 "cancellation": "FLEXIBLE_CANCEL",
                 "status": "AVAILABLE"

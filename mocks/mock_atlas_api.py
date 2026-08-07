@@ -35,6 +35,19 @@ class MockAtlasAPI:
                 "policy": {"cancel_terms": "FREE_CANCEL_24H"}
             },
             {
+                "hotel_code": "ATL-LON-01",
+                "name": "Atlas Mayfair Palace London",
+                "dest_city": "London",
+                "room_info": {"category": "Heritage Queen", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 180.0,
+                    "tax_and_service": 40.0,
+                    "gross_amount": 220.0,
+                    "currency_code": "GBP"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
                 "hotel_code": "ATL-NYC-02",
                 "name": "Atlas Manhattan Suites",
                 "dest_city": "New York",
@@ -57,6 +70,32 @@ class MockAtlasAPI:
                     "tax_and_service": 2800.0,
                     "gross_amount": 30800.0,
                     "currency_code": "JPY"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
+                "hotel_code": "ATL-SYD-01",
+                "name": "Atlas Sydney Harbour Grand",
+                "dest_city": "Sydney",
+                "room_info": {"category": "Harbour King Suite", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 320.0,
+                    "tax_and_service": 60.0,
+                    "gross_amount": 380.0,
+                    "currency_code": "AUD"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
+                "hotel_code": "ATL-ROM-01",
+                "name": "Atlas Colosseum Grand Hotel",
+                "dest_city": "Rome",
+                "room_info": {"category": "Imperial Double Room", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 175.0,
+                    "tax_and_service": 35.0,
+                    "gross_amount": 210.0,
+                    "currency_code": "EUR"
                 },
                 "policy": {"cancel_terms": "FREE_CANCEL_24H"}
             }
