@@ -76,17 +76,23 @@ The codebase provides two startup mechanisms:
 ## Assumptions & Known Limitations
 
 ### 1. Mock Supplier City Coverage
-The mock supplier implementations hardcode specific cities in their internal inventories:
+The mock supplier implementations provide sample properties across six destinations with varied inventory counts:
 - **Mock Atlas API**:
-  - `ATL-PAR-01`: Paris ("Atlas Grand Hotel Paris")
-  - `ATL-NYC-02`: New York ("Atlas Manhattan Suites")
-  - `ATL-TYO-03`: Tokyo ("Atlas Tokyo Bay Resort")
+  - Paris: `ATL-PAR-01` ("Atlas Grand Hotel Paris")
+  - London: `ATL-LON-01` ("Atlas Mayfair Palace London")
+  - New York: `ATL-NYC-02` ("Atlas Manhattan Suites"), `ATL-NYC-03` ("Atlas Central Park Hotel")
+  - Tokyo: `ATL-TYO-03` ("Atlas Tokyo Bay Resort"), `ATL-TYO-04` ("Atlas Shinjuku Tower"), `ATL-TYO-05` ("Atlas Akihabara Zen Suite")
+  - Sydney: `ATL-SYD-01` ("Atlas Sydney Harbour Grand")
+  - Rome: `ATL-ROM-01` ("Atlas Colosseum Grand Hotel"), `ATL-ROM-02` ("Atlas Trastevere Palace")
 - **Mock Nova API**:
-  - `NOV-PAR-101`: Paris ("Nova Boutique Stay Le Marais")
-  - `NOV-LON-202`: London ("Nova Covent Garden Apartments")
-  - `NOV-SYD-303`: Sydney ("Nova Harbour View Villas")
+  - Paris: `NOV-PAR-101` ("Nova Boutique Stay Le Marais")
+  - London: `NOV-LON-202` ("Nova Covent Garden Apartments"), `NOV-LON-203` ("Nova Soho Boutique Studios")
+  - New York: `NOV-NYC-201` ("Nova Times Square Residences"), `NOV-NYC-204` ("Nova Brooklyn Heights Stays")
+  - Tokyo: `NOV-TYO-201` ("Nova Shibuya Modern Stay"), `NOV-TYO-202` ("Nova Ginza Luxury Loft")
+  - Sydney: `NOV-SYD-303` ("Nova Harbour View Villas")
+  - Rome: `NOV-ROM-101` ("Nova Spanish Steps Heritage Stay"), `NOV-ROM-102` ("Nova Vatican View Residence")
 
-Searching for `"Paris"` queries both suppliers. Searching for `"London"` returns only Nova results, while searching for `"Tokyo"` returns only Atlas results. Searching for an unlisted city (e.g. `"Rome"`) returns an empty result set.
+Searching for any of these six destinations queries both suppliers concurrently, yielding 5 properties for Tokyo, 4 for Rome, 4 for New York, 3 for London, 2 for Sydney, and 2 for Paris. Searching for an unlisted city returns an empty result set.
 
 ### 2. Lack of Authentication & Authorization
 All API endpoints (`/search/hotels`, `/bookings`, `/bookings/{id}/history`, `/failures`) are public. There is no user authentication, JWT verification, or role-based access control (RBAC). Admin and audit endpoints are exposed without restriction.
