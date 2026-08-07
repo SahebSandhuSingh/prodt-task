@@ -61,6 +61,19 @@ class MockAtlasAPI:
                 "policy": {"cancel_terms": "NON_REFUNDABLE_ATLAS"}
             },
             {
+                "hotel_code": "ATL-NYC-03",
+                "name": "Atlas Central Park Hotel",
+                "dest_city": "New York",
+                "room_info": {"category": "Park View Double", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 410.0,
+                    "tax_and_service": 80.0,
+                    "gross_amount": 490.0,
+                    "currency_code": "USD"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
                 "hotel_code": "ATL-TYO-03",
                 "name": "Atlas Tokyo Bay Resort",
                 "dest_city": "Tokyo",
@@ -69,6 +82,32 @@ class MockAtlasAPI:
                     "net_amount": 28000.0,
                     "tax_and_service": 2800.0,
                     "gross_amount": 30800.0,
+                    "currency_code": "JPY"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
+                "hotel_code": "ATL-TYO-04",
+                "name": "Atlas Shinjuku Tower",
+                "dest_city": "Tokyo",
+                "room_info": {"category": "Skyline Deluxe Twin", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 22000.0,
+                    "tax_and_service": 2200.0,
+                    "gross_amount": 24200.0,
+                    "currency_code": "JPY"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
+                "hotel_code": "ATL-TYO-05",
+                "name": "Atlas Akihabara Zen Suite",
+                "dest_city": "Tokyo",
+                "room_info": {"category": "Traditional Tatami Suite", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 18000.0,
+                    "tax_and_service": 1800.0,
+                    "gross_amount": 19800.0,
                     "currency_code": "JPY"
                 },
                 "policy": {"cancel_terms": "FREE_CANCEL_24H"}
@@ -95,6 +134,19 @@ class MockAtlasAPI:
                     "net_amount": 175.0,
                     "tax_and_service": 35.0,
                     "gross_amount": 210.0,
+                    "currency_code": "EUR"
+                },
+                "policy": {"cancel_terms": "FREE_CANCEL_24H"}
+            },
+            {
+                "hotel_code": "ATL-ROM-02",
+                "name": "Atlas Trastevere Palace",
+                "dest_city": "Rome",
+                "room_info": {"category": "Terrace Junior Suite", "vacant": True},
+                "price_breakdown": {
+                    "net_amount": 230.0,
+                    "tax_and_service": 40.0,
+                    "gross_amount": 270.0,
                     "currency_code": "EUR"
                 },
                 "policy": {"cancel_terms": "FREE_CANCEL_24H"}

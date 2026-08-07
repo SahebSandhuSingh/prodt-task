@@ -50,6 +50,20 @@ class MockNovaAPI:
                 "status": "AVAILABLE"
             },
             {
+                "propId": "NOV-LON-203",
+                "title": "Nova Soho Boutique Studios",
+                "locationName": "London",
+                "roomType": "Studio Suite",
+                "pricing": {
+                    "nightlyBase": 210.0,
+                    "nights": 1,
+                    "surcharges": 40.0,
+                    "currency": "GBP"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
                 "propId": "NOV-NYC-201",
                 "title": "Nova Times Square Residences",
                 "locationName": "New York",
@@ -64,6 +78,20 @@ class MockNovaAPI:
                 "status": "AVAILABLE"
             },
             {
+                "propId": "NOV-NYC-204",
+                "title": "Nova Brooklyn Heights Stays",
+                "locationName": "New York",
+                "roomType": "Waterfront Studio",
+                "pricing": {
+                    "nightlyBase": 240.0,
+                    "nights": 1,
+                    "surcharges": 50.0,
+                    "currency": "USD"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
                 "propId": "NOV-TYO-201",
                 "title": "Nova Shibuya Modern Stay",
                 "locationName": "Tokyo",
@@ -72,6 +100,20 @@ class MockNovaAPI:
                     "nightlyBase": 19000.0,
                     "nights": 1,
                     "surcharges": 3000.0,
+                    "currency": "JPY"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
+                "propId": "NOV-TYO-202",
+                "title": "Nova Ginza Luxury Loft",
+                "locationName": "Tokyo",
+                "roomType": "Ginza Suite",
+                "pricing": {
+                    "nightlyBase": 26000.0,
+                    "nights": 1,
+                    "surcharges": 4000.0,
                     "currency": "JPY"
                 },
                 "cancellation": "FLEXIBLE_CANCEL",
@@ -100,6 +142,20 @@ class MockNovaAPI:
                     "nightlyBase": 165.0,
                     "nights": 1,
                     "surcharges": 30.0,
+                    "currency": "EUR"
+                },
+                "cancellation": "FLEXIBLE_CANCEL",
+                "status": "AVAILABLE"
+            },
+            {
+                "propId": "NOV-ROM-102",
+                "title": "Nova Vatican View Residence",
+                "locationName": "Rome",
+                "roomType": "Penthouse Terrace",
+                "pricing": {
+                    "nightlyBase": 220.0,
+                    "nights": 1,
+                    "surcharges": 35.0,
                     "currency": "EUR"
                 },
                 "cancellation": "FLEXIBLE_CANCEL",
