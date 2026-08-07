@@ -1,16 +1,28 @@
-# Travel Booking Prototype
+# Travel Supplier Search & Booking Engine
 
-A production-grade travel booking system featuring multi-supplier offer aggregation, normalized ranking, PostgreSQL audit persistence, and durable workflow execution powered by Temporal.
+A travel booking system featuring multi-supplier offer aggregation, normalized composite ranking, PostgreSQL audit persistence, and durable workflow orchestration powered by Temporal.
 
 ---
 
-## 🐳 Quick Start: Docker Compose (Primary Recommended Method)
+## Documentation Index
+
+Comprehensive project documentation is available in the `docs/` directory:
+
+- [System Architecture](docs/ARCHITECTURE.md): Architecture overview, system sequence diagram, search & saga booking flow walkthroughs.
+- [Database Schema](docs/DATABASE_SCHEMA.md): Complete reference for all 6 database tables, ER diagram, deterministic offer hash rationale, and Alembic migrations.
+- [API Reference](docs/API.md): Endpoint manual with real request/response payloads and error response schemas.
+- [Engineering Decisions & Limitations](docs/DECISIONS_AND_LIMITATIONS.md): Technical decision rationale and explicit system assumptions.
+- [AI Usage Documentation](docs/AI_USAGE.md): Narrative documenting AI coding assistant usage, plan reviews, and engineering choices.
+
+---
+
+## Quick Start: Docker Compose (Primary Deployment Method)
 
 ### Prerequisite
 - **Docker Desktop** (installed and running)
 
-### One-Command Full Stack Startup
-Clone the repository and bring up the complete containerized stack in a single command:
+### Full Stack Startup
+Clone the repository and bring up the complete containerized stack:
 
 ```bash
 git clone https://github.com/SahebSandhuSingh/prodt-task.git
@@ -18,18 +30,18 @@ cd prodt-task
 docker compose up --build
 ```
 
-#### What `docker compose up --build` Launches:
-- **`postgres`**: PostgreSQL 16 database container (`localhost:5433`, db: `travel_booking`).
-- **`temporal`**: Temporal Server container (`localhost:7233`).
+#### Services Launched:
+- **`postgres`**: PostgreSQL 16 database (`localhost:5433`, database: `travel_booking`).
+- **`temporal`**: Temporal Server (`localhost:7233`).
 - **`temporal-ui`**: Temporal Web Dashboard (`http://localhost:8233`).
-- **`api`**: FastAPI Web Server (`http://localhost:8000`, interactive OpenAPI docs at `/docs`).
-- **`worker`**: Temporal Worker process listening on `booking-task-queue`.
+- **`api`**: FastAPI Web Server (`http://localhost:8000`, interactive Swagger UI at `/docs`, web SPA at `/`).
+- **`worker`**: Temporal Worker process executing booking workflow activities.
 
 ---
 
-## ⚡ Alternative Method: Local Script (`./run.sh`)
+## Alternative Method: Local Script (`./run.sh`)
 
-If you prefer running the Python services directly on your host machine:
+To run PostgreSQL and Temporal in Docker while executing Python services locally:
 
 ```bash
 ./run.sh
@@ -37,13 +49,14 @@ If you prefer running the Python services directly on your host machine:
 
 ---
 
-## 🌐 Live Services & Verification URLs
+## Live Services & Endpoints
 
-- **FastAPI Interactive Docs (Swagger UI)**: `http://localhost:8000/docs`
+- **Web Dashboard**: `http://localhost:8000/`
+- **FastAPI OpenAPI Documentation**: `http://localhost:8000/docs`
 - **Temporal Web Dashboard**: `http://localhost:8233`
 - **PostgreSQL Connection**: `localhost:5433` (db: `travel_booking`, user: `postgres`, password: `postgres`)
 
-### Example Usage Commands
+### Example Terminal Commands
 
 #### 1. Search Hotels (Aggregated & Ranked)
 ```bash
@@ -62,7 +75,7 @@ curl -s http://localhost:8000/search-requests/<request_id>
 curl -s -X POST http://localhost:8000/bookings \
   -H "Content-Type: application/json" \
   -d '{
-    "offer_id": "OFFER-330001a322faaf48",
+    "offer_id": "OFFER-atlas-ATL-PAR-01",
     "supplier_id": "atlas",
     "property_id": "ATL-PAR-01",
     "check_in_date": "2026-09-01",
@@ -82,8 +95,10 @@ curl -s http://localhost:8000/bookings/BK-demo-booking/history
 
 ---
 
-## 🧪 Running Automated Tests
+## Running Automated Tests
+
+To execute the test suite:
 
 ```bash
-python -m pytest -v tests/
+.venv312/bin/pytest -v tests/
 ```
