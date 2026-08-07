@@ -14,7 +14,6 @@
     <div class="container header-inner">
       <a href="#" class="brand" onclick="showView('search')" id="brand-link">
         <div class="brand-mark">AuraStays<span>.com</span></div>
-        <span class="brand-badge">Temporal Powered</span>
       </a>
       <nav class="header-nav">
         <button class="nav-btn active" id="nav-search" onclick="showView('search')">Search</button>
@@ -40,7 +39,7 @@
           <div class="search-grid">
             <div class="search-field">
               <label for="search-dest">Destination</label>
-              <select id="search-dest">
+              <select id="search-dest" onchange="handleSearchSubmit(event)">
                 <option value="Paris">Paris, France</option>
                 <option value="London">London, United Kingdom</option>
                 <option value="New York">New York, USA</option>
@@ -51,15 +50,15 @@
             </div>
             <div class="search-field">
               <label for="search-checkin">Check-in</label>
-              <input type="date" id="search-checkin" value="2026-09-01" required>
+              <input type="date" id="search-checkin" value="2026-09-01" required onchange="handleSearchSubmit(event)">
             </div>
             <div class="search-field">
               <label for="search-checkout">Check-out</label>
-              <input type="date" id="search-checkout" value="2026-09-05" required>
+              <input type="date" id="search-checkout" value="2026-09-05" required onchange="handleSearchSubmit(event)">
             </div>
             <div class="search-field">
               <label for="search-guests">Guests</label>
-              <select id="search-guests">
+              <select id="search-guests" onchange="handleSearchSubmit(event)">
                 <option value="1">1</option>
                 <option value="2" selected>2</option>
                 <option value="3">3</option>
@@ -68,7 +67,7 @@
             </div>
             <div class="search-field">
               <label for="search-rooms">Rooms</label>
-              <select id="search-rooms">
+              <select id="search-rooms" onchange="handleSearchSubmit(event)">
                 <option value="1" selected>1</option>
                 <option value="2">2</option>
                 <option value="3">3</option>
@@ -78,7 +77,7 @@
           </div>
         </form>
         <div class="search-hint">
-          Try searching <strong>Paris</strong> to see results from both suppliers.
+          Live rates aggregated from Atlas Hotels and Nova Stays.
         </div>
       </div>
     </div>
