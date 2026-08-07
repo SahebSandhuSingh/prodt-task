@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AuraStays - Hotel Search & Booking</title>
+  <meta name="description" content="Search and book hotels across multiple suppliers with real-time pricing and availability.">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+  <!-- ─── Header ─── -->
+  <header class="site-header">
+    <div class="container header-inner">
+      <a href="#" class="brand" onclick="showView('search')" id="brand-link">
+        <div class="brand-mark">AuraStays<span>.com</span></div>
+        <span class="brand-badge">Temporal Powered</span>
+      </a>
+      <nav class="header-nav">
+        <button class="nav-btn active" id="nav-search" onclick="showView('search')">Search</button>
+        <button class="nav-btn" id="nav-trips" onclick="showView('trips')">My Bookings</button>
+        <button class="nav-btn" id="nav-admin" onclick="showView('admin')">Audit</button>
+      </nav>
+    </div>
+  </header>
+
+  <!-- ─── Hero ─── -->
+  <section id="hero-section" class="hero">
+    <div class="container">
+      <h1>Find your next stay</h1>
+      <p>Compare live rates from Atlas Hotels and Nova Stays in one search.</p>
+    </div>
+  </section>
+
+  <!-- ─── Search Bar ─── -->
+  <div class="container search-wrap" id="search-bar-wrap">
+    <div class="search-accent">
+      <div class="search-panel">
+        <form id="search-form" onsubmit="handleSearchSubmit(event)">
+          <div class="search-grid">
+            <div class="search-field">
+              <label for="search-dest">Destination</label>
+              <select id="search-dest">
+                <option value="Paris">Paris, France</option>
+                <option value="London">London, United Kingdom</option>
+                <option value="New York">New York, USA</option>
+                <option value="Tokyo">Tokyo, Japan</option>
+              </select>
+            </div>
+            <div class="search-field">
+              <label for="search-checkin">Check-in</label>
+              <input type="date" id="search-checkin" value="2026-09-01" required>
+            </div>
+            <div class="search-field">
+              <label for="search-checkout">Check-out</label>
+              <input type="date" id="search-checkout" value="2026-09-05" required>
+            </div>
+            <div class="search-field">
+              <label for="search-guests">Guests</label>
+              <select id="search-guests">
+                <option value="1">1</option>
+                <option value="2" selected>2</option>
+                <option value="3">3</option>
+                <option value="4">4</option>
+              </select>
+            </div>
+            <div class="search-field">
+              <label for="search-rooms">Rooms</label>
+              <select id="search-rooms">
+                <option value="1" selected>1</option>
+                <option value="2">2</option>
+                <option value="3">3</option>
+              </select>
+            </div>
+            <button type="submit" class="btn-primary" id="btn-search">Search</button>
+          </div>
+        </form>
+        <div class="search-hint">
+          Try searching <strong>Paris</strong> to see results from both suppliers.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Main Content ─── -->
+  <main class="container">
+
+    <!-- SEARCH RESULTS -->
+    <section id="view-search">
+      <div id="partial-failure-banner" class="partial-banner" style="display:none;">
+        <span id="partial-failure-msg"></span>
+      </div>
+      <div class="toolbar">
+        <h2 id="results-heading">Searching...</h2>
+        <div class="toolbar-sort">
+          <span>Sort by</span>
+          <select id="sort-select" onchange="handleSortChange()">
+            <option value="rank">Recommended</option>
+            <option value="price-asc">Price: Low to High</option>
+            <option value="price-desc">Price: High to Low</option>
+          </select>
+        </div>
+      </div>
+      <div id="property-grid" class="card-grid"></div>
+    </section>
+
+    <!-- MY BOOKINGS -->
+    <section id="view-trips" class="page-section" style="display:none;">
+      <h2>My Reservations</h2>
+      <p class="subtitle">Your recent bookings and their live workflow status.</p>
+      <div class="lookup-bar">
+        <input type="text" id="trip-search-input" placeholder="Look up a booking by ID (e.g. booking-b-xyz)">
+        <button class="btn-primary" style="height:42px; font-size:13px;" onclick="lookupTripDetails()">Find</button>
+      </div>
+      <div id="trip-result-container">
+        <div class="empty">
+          <h3>No bookings yet</h3>
+          <p>Search for a hotel and make a reservation to see it here.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- AUDIT -->
+    <section id="view-admin" class="page-section" style="display:none;">
+      <h2>Audit Explorer</h2>
+      <p class="subtitle">Query persisted search requests and normalized offer records from PostgreSQL.</p>
+      <div class="lookup-bar">
+        <input type="text" id="admin-audit-input" placeholder="Enter a Search Request ID (UUID)">
+        <button class="btn-primary" style="height:42px; font-size:13px;" onclick="lookupAuditRecord()">Query</button>
+      </div>
+      <div id="admin-audit-output" class="audit-output"></div>
+    </section>
+
+  </main>
+
+  <!-- ─── Booking Modal ─── -->
+  <div id="checkout-modal" class="modal-overlay">
+    <div class="modal-box">
+      <button class="modal-close" onclick="closeCheckoutModal()">✕</button>
+
+      <h2 class="modal-title" id="modal-property-name">Property Name</h2>
+      <p class="modal-sub" id="modal-sub">Room Reservation</p>
+
+      <!-- Summary -->
+      <div class="summary-box">
+        <div class="summary-row">
+          <span>Dates</span>
+          <strong id="modal-dates">Sep 1 – Sep 5, 2026 (4 nights)</strong>
+        </div>
+        <div class="summary-row">
+          <span>Supplier</span>
+          <strong id="modal-supplier">Atlas Hotels</strong>
+        </div>
+        <div class="summary-row total">
+          <span>Total Price</span>
+          <strong id="modal-price">EUR 240.00</strong>
+        </div>
+      </div>
+
+      <!-- Guest Form -->
+      <form id="checkout-form" onsubmit="handleConfirmBooking(event)">
+        <div class="form-row">
+          <div class="form-field">
+            <label for="guest-first-name">First Name</label>
+            <input type="text" id="guest-first-name" value="Alice" required>
+          </div>
+          <div class="form-field">
+            <label for="guest-last-name">Last Name</label>
+            <input type="text" id="guest-last-name" value="Smith" required>
+          </div>
+        </div>
+        <div class="form-field" style="margin-bottom:14px;">
+          <label for="guest-email">Email</label>
+          <input type="email" id="guest-email" value="alice.smith@example.com" required>
+        </div>
+        <p class="form-note">
+          Demo environment — no payment required. Booking is processed through the Temporal workflow engine with full saga compensation.
+        </p>
+        <button type="submit" class="btn-primary" style="width:100%;">Confirm Booking</button>
+      </form>
+
+      <!-- Polling / Status Section -->
+      <div id="polling-section" style="display:none;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+          <div>
+            <h3 style="font-size:16px; font-weight:800;">Processing Reservation</h3>
+            <p style="font-size:12px; color:var(--text-tertiary);" id="polling-wf-id">Workflow ID</p>
+          </div>
+          <span id="polling-badge" class="badge badge-processing">PROCESSING</span>
+        </div>
+
+        <!-- 4-Step Stepper -->
+        <div class="stepper">
+          <div class="stepper-track"></div>
+          <div class="stepper-nodes">
+            <div class="stepper-node" id="step-1">
+              <div class="node-dot">1</div>
+              <span class="node-label">Revalidate</span>
+            </div>
+            <div class="stepper-node" id="step-2">
+              <div class="node-dot">2</div>
+              <span class="node-label">Reserve</span>
+            </div>
+            <div class="stepper-node" id="step-3">
+              <div class="node-dot">3</div>
+              <span class="node-label">Persist</span>
+            </div>
+            <div class="stepper-node" id="step-4">
+              <div class="node-dot">4</div>
+              <span class="node-label">Confirmed</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status History -->
+        <div id="polling-timeline" class="timeline">
+          <div class="tl-item">
+            <div class="tl-time">Just now</div>
+            <div class="tl-status"><span class="badge badge-processing">PROCESSING</span></div>
+            <div class="tl-reason">Workflow initiated, executing price revalidation</div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btn-cancel-booking" class="btn-danger-outline" onclick="handleCancelBooking()">Cancel Booking</button>
+          <button id="btn-done" class="btn-primary" style="display:none; height:38px; font-size:13px;" onclick="closeCheckoutModal()">Done</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
