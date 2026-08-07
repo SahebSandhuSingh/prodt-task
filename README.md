@@ -39,16 +39,6 @@ docker compose up --build
 
 ---
 
-## Alternative Method: Local Script (`./run.sh`)
-
-To run PostgreSQL and Temporal in Docker while executing Python services locally:
-
-```bash
-./run.sh
-```
-
----
-
 ## Live Services & Endpoints
 
 - **Web Dashboard**: `http://localhost:8000/`
